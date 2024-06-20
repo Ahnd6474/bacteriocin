@@ -59,15 +59,19 @@ def evaluate_ensemble(models, input_data, model_accuracies):
     weights = []
     for model, model_type, _ in models:
         try:
-            if model_type == 'cnn':
+            if model_type == 'ml':
+                y_pred_prob = evaluate_model(model, input_data.reshape(1, -1), model_type)
+            elif model_type == 'mlp':
+                y_pred_prob = evaluate_model(model, input_data.reshape(1, input_data.shape[0], input_data.shape[1]), model_type)
+            elif model_type == 'cnn':
                 cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
                 y_pred_prob = evaluate_model(model, cnn_input_data, model_type)
-            elif model_type == 'dl' and model.input_shape[-1] == 100:
-                dl_input_data = input_data[:, :100]
-                y_pred_prob = evaluate_model(model, dl_input_data, model_type)
-            elif model_type == 'dl' and model.input_shape[-1] == 300:
-                dl_input_data = input_data
-                y_pred_prob = evaluate_model(model, dl_input_data, model_type)
+            elif model_type == 'dl':
+                if model.input_shape[-1] == 100:
+                    dl_input_data = input_data[:, :100]
+                else:
+                    dl_input_data = input_data
+                y_pred_prob = evaluate_model(model, dl_input_data.reshape(1, dl_input_data.shape[0], dl_input_data.shape[1]), model_type)
             else:
                 y_pred_prob = evaluate_model(model, input_data, model_type)
             if y_pred_prob.size > 0:
