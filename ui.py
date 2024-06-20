@@ -53,12 +53,11 @@ def evaluate_model(model, input_data, model_type='ml'):
     else:
         y_pred = (model.predict(input_data) > 0.5).astype("int32")
         y_pred = y_pred.flatten()
-    return y_pred
+    return np.array(y_pred)
 
 # 가중치 투표 방식 평가 함수
 def evaluate_ensemble(models, input_data, y_test):
     preds = []
-    weights = []
     for model, model_type in models:
         if model_type == 'cnn':
             cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
@@ -81,6 +80,9 @@ def evaluate_ensemble(models, input_data, y_test):
     y_pred_final = (y_pred_final / len(models)).round().astype(int)
 
     # y_test의 형식을 일관되게 맞춤
+    if isinstance(y_test, pd.Series):
+        y_test = y_test.to_numpy()
+
     y_test = y_test.astype(int)
 
     accuracy = accuracy_score(y_test, y_pred_final)
