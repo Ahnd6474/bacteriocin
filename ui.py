@@ -102,7 +102,7 @@ if st.button('Classify'):
             return input_data.reshape(1, 300, 20, 1)
 
         def transform_dl(input_data):
-            return input_data.flatten()[:100].reshape(1, 100, 1)
+            return input_data.flatten()[:100].reshape(1, 100)
 
         models = [
             (ml_model, 'ml', transform_ml),
