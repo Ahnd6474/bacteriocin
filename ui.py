@@ -97,7 +97,7 @@ if st.button('Classify'):
         cnn_accuracy = evaluate_model(cnn_model, cnn_X_test, model_type='dl')
 
         # 임베딩 모델 평가
-        dl_input_data = X_test.reshape(X_test.shape[0], 100, 3)  # Adjust the shape according to your model's input shape
+        dl_input_data = X_test[:, :100]  # Adjust the shape according to your model's input shape
         dl_accuracy = evaluate_model(dl_model_emb, dl_input_data, model_type='dl')
 
         # 모델 로드 및 평가 (집계)
