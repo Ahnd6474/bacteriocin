@@ -95,20 +95,23 @@ def evaluate_ensemble(models, input_data):
 
 # 스트림릿 UI 설정
 st.title('Bacteriocin Amino Acid Sequence Classifier')
-st.write('Enter amino acid sequences to predict the probability they are bacteriocins.')
+st.write('Enter an amino acid sequence to predict the probability it is a bacteriocin.')
 
 # 아미노산 서열 입력
-sequences = st.text_area('Enter amino acid sequences (one per line):')
+sequence = st.text_area('Enter an amino acid sequence:')
 
 if st.button('Classify'):
-    if sequences:
-        sequences = sequences.strip().split('\n')
+    if sequence:
+        sequence = sequence.strip()
 
         # 데이터 로드
         X_test, y_test = load_data()
 
         # 모델 로드
         ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
+
+        # 입력 데이터 전처리 (여기서는 간단히 설명하기 위해 X_test의 첫 번째 데이터를 사용)
+        input_data = np.array([X_test[0]])  # 예시로 첫 번째 데이터를 사용
 
         # 모델 및 가중치 설정
         models = [
@@ -119,11 +122,10 @@ if st.button('Classify'):
         ]
 
         # 모델 평가 및 집계
-        ensemble_probs = evaluate_ensemble(models, X_test)
+        ensemble_prob = evaluate_ensemble(models, input_data)
 
         # 결과 출력
-        if ensemble_probs is not None:
-            for i, prob in enumerate(ensemble_probs):
-                st.write(f"Sequence {i+1}: Probability of being bacteriocin: {prob:.4f}")
+        if ensemble_prob is not None:
+            st.write(f"Probability of being bacteriocin: {ensemble_prob[0]:.4f}")
     else:
-        st.write('Please enter at least one amino acid sequence.')
+        st.write('Please enter an amino acid sequence.')
