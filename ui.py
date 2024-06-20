@@ -69,18 +69,21 @@ def evaluate_model(model, input_data, model_type='ml'):
 def evaluate_ensemble(models, input_data, y_test):
     preds = []
     for model, model_type, _ in models:
-        if model_type == 'cnn':
-            cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
-            y_pred = evaluate_model(model, cnn_input_data, model_type)
-        elif model_type == 'dl' and model.input_shape[-1] == 100:
-            dl_input_data = input_data[:, :100]
-            y_pred = evaluate_model(model, dl_input_data, model_type)
-        elif model_type == 'dl' and model.input_shape[-1] == 300:
-            dl_input_data = input_data
-            y_pred = evaluate_model(model, dl_input_data, model_type)
-        else:
-            y_pred = evaluate_model(model, input_data, model_type)
-        preds.append(y_pred)
+        try:
+            if model_type == 'cnn':
+                cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
+                y_pred = evaluate_model(model, cnn_input_data, model_type)
+            elif model_type == 'dl' and model.input_shape[-1] == 100:
+                dl_input_data = input_data[:, :100]
+                y_pred = evaluate_model(model, dl_input_data, model_type)
+            elif model_type == 'dl' and model.input_shape[-1] == 300:
+                dl_input_data = input_data
+                y_pred = evaluate_model(model, dl_input_data, model_type)
+            else:
+                y_pred = evaluate_model(model, input_data, model_type)
+            preds.append(y_pred)
+        except Exception as e:
+            st.error(f"Error evaluating {model_type} model: {e}")
 
     if len(preds) == 0:
         st.error("No predictions could be made. Please check the input and try again.")
@@ -95,15 +98,19 @@ def evaluate_ensemble(models, input_data, y_test):
 
     y_test = y_test.astype(int)
 
-    accuracy = accuracy_score(y_test, y_pred_final)
-    cm = confusion_matrix(y_test, y_pred_final)
-    cr = classification_report(y_test, y_pred_final)
+    try:
+        accuracy = accuracy_score(y_test, y_pred_final)
+        cm = confusion_matrix(y_test, y_pred_final)
+        cr = classification_report(y_test, y_pred_final)
 
-    st.write(f"Accuracy: {accuracy}")
-    st.write("Confusion Matrix:")
-    st.write(cm)
-    st.write("Classification Report:")
-    st.write(cr)
+        st.write(f"Accuracy: {accuracy}")
+        st.write("Confusion Matrix:")
+        st.write(cm)
+        st.write("Classification Report:")
+        st.write(cr)
+    except ValueError as e:
+        st.error(f"Error calculating accuracy: {e}")
+        return None
 
     return accuracy
 
