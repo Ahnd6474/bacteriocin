@@ -1,55 +1,35 @@
-import streamlit as st
-import pickle
 import numpy as np
 import tensorflow as tf
+import streamlit as st
 import os
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-import pandas as pd
+import pickle
+from sklearn.metrics import accuracy_score
 
-# 경로 설정
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH = os.path.join(PROJECT_ROOT, 'Data', 'processed')
-MODEL_PATH = os.path.join(PROJECT_ROOT, 'model')
-
-# 데이터 로드 함수
-@st.cache_data
-def load_data():
-    x_test_path = os.path.join(DATA_PATH, 'X_test.pkl')
-    y_test_path = os.path.join(DATA_PATH, 'y_test.pkl')
-
-    if not os.path.exists(x_test_path) or not os.path.exists(y_test_path):
-        st.error(f"File not found: {x_test_path} or {y_test_path}")
-        st.stop()
-
-    with open(x_test_path, 'rb') as f:
-        X_test = pickle.load(f)
-    with open(y_test_path, 'rb') as f:
-        y_test = pickle.load(f)
-
-    # y_test를 numpy 배열로 변환
-    if isinstance(y_test, pd.Series):
-        y_test = y_test.to_numpy()
-
-    return X_test, y_test
-
-# 모델 로드 함수
-@st.cache_resource
+# 모델 로드
 def load_models():
-    ensemble_model_path = os.path.join(MODEL_PATH, 'ensemble_model.pkl')
-    mlp_model_path = os.path.join(MODEL_PATH, 'mlp_model.h5')
-    cnn_model_path = os.path.join(MODEL_PATH, 'cnn_model.h5')
-    dl_model_emb_path = os.path.join(MODEL_PATH, 'dl_model_emb.h5')
-
-    if not os.path.exists(ensemble_model_path) or not os.path.exists(mlp_model_path) or not os.path.exists(cnn_model_path) or not os.path.exists(dl_model_emb_path):
-        st.error(f"Model file not found in path: {MODEL_PATH}")
-        st.stop()
-
-    with open(ensemble_model_path, 'rb') as f:
+    model_path = 'model'
+    with open(os.path.join(model_path, 'ensemble_model.pkl'), 'rb') as f:
         ml_model = pickle.load(f)
-    mlp_model = tf.keras.models.load_model(mlp_model_path)
-    cnn_model = tf.keras.models.load_model(cnn_model_path)
-    dl_model_emb = tf.keras.models.load_model(dl_model_emb_path)
+
+    mlp_model = tf.keras.models.load_model(os.path.join(model_path, 'mlp_model.h5'))
+    cnn_model = tf.keras.models.load_model(os.path.join(model_path, 'cnn_model.h5'))
+    dl_model_emb = tf.keras.models.load_model(os.path.join(model_path, 'dl_model_emb.h5'))
+
     return ml_model, mlp_model, cnn_model, dl_model_emb
+
+# 원-핫 인코딩 함수
+def one_hot_encode_sequence(sequence, max_length=300):
+    amino_acids = 'ACDEFGHIKLMNPQRSTVWY'
+    aa_dict = {aa: idx for idx, aa in enumerate(amino_acids)}
+    encoded_seq = np.zeros((max_length, len(amino_acids)))
+
+    for i, aa in enumerate(sequence):
+        if i >= max_length:
+            break
+        if aa in aa_dict:
+            encoded_seq[i, aa_dict[aa]] = 1.0
+
+    return encoded_seq
 
 # 모델 평가 함수
 def evaluate_model(model, input_data, model_type='ml'):
@@ -63,7 +43,7 @@ def evaluate_model(model, input_data, model_type='ml'):
         st.error(f"Error evaluating {model_type} model: {e}")
         return np.array([])
 
-# 가중치 투표 방식 평가 함수
+# 앙상블 평가 함수
 def evaluate_ensemble(models, input_data):
     preds = []
     for model, model_type, _ in models:
@@ -93,27 +73,20 @@ def evaluate_ensemble(models, input_data):
 
     return y_pred_prob_final
 
-# 스트림릿 UI 설정
+# Streamlit UI
 st.title('Bacteriocin Amino Acid Sequence Classifier')
 st.write('Enter an amino acid sequence to predict the probability it is a bacteriocin.')
 
-# 아미노산 서열 입력
 sequence = st.text_area('Enter an amino acid sequence:')
 
 if st.button('Classify'):
     if sequence:
-        sequence = sequence.strip()
+        sequence = sequence.strip().upper()
 
-        # 데이터 로드
-        X_test, y_test = load_data()
+        input_data = np.array([one_hot_encode_sequence(sequence)])
 
-        # 모델 로드
         ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
 
-        # 입력 데이터 전처리 (여기서는 간단히 설명하기 위해 X_test의 첫 번째 데이터를 사용)
-        input_data = np.array([X_test[0]])  # 예시로 첫 번째 데이터를 사용
-
-        # 모델 및 가중치 설정
         models = [
             (ml_model, 'ml', None),
             (mlp_model, 'dl', None),
@@ -121,10 +94,8 @@ if st.button('Classify'):
             (dl_model_emb, 'dl', None)
         ]
 
-        # 모델 평가 및 집계
         ensemble_prob = evaluate_ensemble(models, input_data)
 
-        # 결과 출력
         if ensemble_prob is not None:
             st.write(f"Probability of being bacteriocin: {ensemble_prob[0] * 100:.2f}%")
     else:
