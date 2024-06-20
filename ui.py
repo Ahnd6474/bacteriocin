@@ -53,13 +53,17 @@ def load_models():
 
 # 모델 평가 함수
 def evaluate_model(model, input_data, model_type='ml'):
-    if model_type == 'ml':
-        y_pred = model.predict(input_data)
-        y_pred = np.argmax(y_pred, axis=1) if y_pred.ndim > 1 else y_pred
-    else:
-        y_pred = (model.predict(input_data) > 0.5).astype("int32")
-        y_pred = y_pred.flatten()
-    return np.array(y_pred)
+    try:
+        if model_type == 'ml':
+            y_pred = model.predict(input_data)
+            y_pred = np.argmax(y_pred, axis=1) if y_pred.ndim > 1 else y_pred
+        else:
+            y_pred = (model.predict(input_data) > 0.5).astype("int32")
+            y_pred = y_pred.flatten()
+        return np.array(y_pred)
+    except Exception as e:
+        st.error(f"Error evaluating {model_type} model: {e}")
+        return np.array([])
 
 # 가중치 투표 방식 평가 함수
 def evaluate_ensemble(models, input_data, y_test):
@@ -78,6 +82,10 @@ def evaluate_ensemble(models, input_data, y_test):
             y_pred = evaluate_model(model, input_data, model_type)
         preds.append(y_pred)
 
+    if len(preds) == 0:
+        st.error("No predictions could be made. Please check the input and try again.")
+        return None
+
     preds = np.array(preds)
     y_pred_final = np.zeros(preds.shape[1])
     for i in range(len(models)):
@@ -91,11 +99,11 @@ def evaluate_ensemble(models, input_data, y_test):
     cm = confusion_matrix(y_test, y_pred_final)
     cr = classification_report(y_test, y_pred_final)
 
-    print(f"Accuracy: {accuracy}")
-    print("Confusion Matrix:")
-    print(cm)
-    print("Classification Report:")
-    print(cr)
+    st.write(f"Accuracy: {accuracy}")
+    st.write("Confusion Matrix:")
+    st.write(cm)
+    st.write("Classification Report:")
+    st.write(cr)
 
     return accuracy
 
@@ -134,7 +142,8 @@ if st.button('Classify'):
         ensemble_accuracy = evaluate_ensemble(models, X_test, y_test)
 
         # 결과 출력
-        st.write('Ensemble Model Accuracy:')
-        st.write(f'{ensemble_accuracy}')
+        if ensemble_accuracy:
+            st.write('Ensemble Model Accuracy:')
+            st.write(f'{ensemble_accuracy}')
     else:
         st.write('Please enter at least one amino acid sequence.')
