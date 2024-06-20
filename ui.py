@@ -35,7 +35,7 @@ def one_hot_encode_sequence(sequence, max_length=300):
 def evaluate_model(model, input_data, model_type='ml'):
     try:
         if model_type == 'ml':
-            y_pred_prob = model.predict_proba(input_data.reshape(input_data.shape[0], -1))[:, 1]
+            y_pred_prob = model.predict_proba(input_data.reshape(1, -1))[:, 1]
         else:
             y_pred_prob = model.predict(input_data).flatten()
         return y_pred_prob
@@ -57,23 +57,10 @@ def load_model_accuracies():
 def evaluate_ensemble(models, input_data, model_accuracies):
     preds = []
     weights = []
-    for model, model_type, _ in models:
+    for model, model_type, input_transform in models:
         try:
-            if model_type == 'ml':
-                y_pred_prob = evaluate_model(model, input_data.reshape(1, -1), model_type)
-            elif model_type == 'mlp':
-                y_pred_prob = evaluate_model(model, input_data.reshape(1, input_data.shape[0], input_data.shape[1]), model_type)
-            elif model_type == 'cnn':
-                cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
-                y_pred_prob = evaluate_model(model, cnn_input_data, model_type)
-            elif model_type == 'dl':
-                if model.input_shape[-1] == 100:
-                    dl_input_data = input_data[:, :100]
-                else:
-                    dl_input_data = input_data
-                y_pred_prob = evaluate_model(model, dl_input_data.reshape(1, dl_input_data.shape[0], dl_input_data.shape[1]), model_type)
-            else:
-                y_pred_prob = evaluate_model(model, input_data, model_type)
+            transformed_input = input_transform(input_data)
+            y_pred_prob = evaluate_model(model, transformed_input, model_type)
             if y_pred_prob.size > 0:
                 preds.append(y_pred_prob * model_accuracies[model_type])
                 weights.append(model_accuracies[model_type])
@@ -100,16 +87,28 @@ if st.button('Classify'):
     if sequence:
         sequence = sequence.strip().upper()
 
-        input_data = np.array([one_hot_encode_sequence(sequence)])
+        input_data = one_hot_encode_sequence(sequence)
 
         ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
         model_accuracies = load_model_accuracies()
 
+        def transform_ml(input_data):
+            return input_data.flatten()[:300]
+
+        def transform_mlp(input_data):
+            return input_data.flatten().reshape(1, 300)
+
+        def transform_cnn(input_data):
+            return input_data.reshape(1, 300, 20, 1)
+
+        def transform_dl(input_data):
+            return input_data.flatten()[:100].reshape(1, 100, 20)
+
         models = [
-            (ml_model, 'ml', None),
-            (mlp_model, 'mlp', None),
-            (cnn_model, 'cnn', None),
-            (dl_model_emb, 'dl', None)
+            (ml_model, 'ml', transform_ml),
+            (mlp_model, 'mlp', transform_mlp),
+            (cnn_model, 'cnn', transform_cnn),
+            (dl_model_emb, 'dl', transform_dl)
         ]
 
         ensemble_prob = evaluate_ensemble(models, input_data, model_accuracies)
