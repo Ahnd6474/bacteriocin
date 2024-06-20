@@ -60,7 +60,7 @@ def evaluate_model(model, input_data, model_type='ml'):
     return y_pred
 
 
-# 모델 평가 함수 (집계 결과 포함)
+# 가중치 투표 방식 평가 함수
 def evaluate_ensemble(models, input_data, y_test):
     preds = []
     weights = []
@@ -68,18 +68,23 @@ def evaluate_ensemble(models, input_data, y_test):
         if model_type == 'cnn':
             cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
             y_pred = evaluate_model(model, cnn_input_data, model_type)
-        elif model_type == 'dl':
+        elif model_type == 'dl' and model.input_shape[-1] == 100:
             dl_input_data = input_data[:, :100]
+            y_pred = evaluate_model(model, dl_input_data, model_type)
+        elif model_type == 'dl' and model.input_shape[-1] == 300:
+            dl_input_data = input_data
             y_pred = evaluate_model(model, dl_input_data, model_type)
         else:
             y_pred = evaluate_model(model, input_data, model_type)
         preds.append(y_pred)
         weights.append(weight)
 
-    # Weighted voting
     preds = np.array(preds)
-    weighted_preds = np.tensordot(weights, preds, axes=(0, 0))
-    y_pred = np.argmax(weighted_preds, axis=0)
+    weighted_preds = np.zeros(preds.shape[1])
+    for i in range(len(models)):
+        weighted_preds += preds[i] * weights[i]
+
+    y_pred = (weighted_preds >= (sum(weights) / 2)).astype(int)
 
     accuracy = accuracy_score(y_test, y_pred)
     return accuracy
@@ -102,13 +107,13 @@ if st.button('Classify'):
         # 모델 로드
         ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
 
-        # 모델 정확도 계산
-        ml_accuracy = 0.98  # 가정된 정확도
-        mlp_accuracy = 0.99  # 가정된 정확도
-        cnn_accuracy = 0.985  # 가정된 정확도
-        dl_accuracy = 0.95  # 가정된 정확도
+        # 모델 정확도 가정된 값
+        ml_accuracy = 0.98  # 예시 값
+        mlp_accuracy = 0.99  # 예시 값
+        cnn_accuracy = 0.985  # 예시 값
+        dl_accuracy = 0.95  # 예시 값
 
-        # 가중치를 각 모델의 정확도로 설정
+        # 모델 및 가중치 설정
         models = [
             (ml_model, 'ml', ml_accuracy),
             (mlp_model, 'dl', mlp_accuracy),
@@ -116,7 +121,7 @@ if st.button('Classify'):
             (dl_model_emb, 'dl', dl_accuracy)
         ]
 
-        # 모델 로드 및 평가 (집계)
+        # 모델 평가 및 집계
         ensemble_accuracy = evaluate_ensemble(models, X_test, y_test)
 
         # 결과 출력
