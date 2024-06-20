@@ -6,27 +6,43 @@ import os
 from sklearn.metrics import accuracy_score
 
 # 경로 설정
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(PROJECT_ROOT, 'Data', 'processed')
 MODEL_PATH = os.path.join(PROJECT_ROOT, 'model')
 
 # 데이터 로드 함수
 @st.cache_data
 def load_data():
-    with open(os.path.join(DATA_PATH, 'X_test.pkl'), 'rb') as f:
+    x_test_path = os.path.join(DATA_PATH, 'X_test.pkl')
+    y_test_path = os.path.join(DATA_PATH, 'y_test.pkl')
+
+    if not os.path.exists(x_test_path) or not os.path.exists(y_test_path):
+        st.error(f"File not found: {x_test_path} or {y_test_path}")
+        st.stop()
+
+    with open(x_test_path, 'rb') as f:
         X_test = pickle.load(f)
-    with open(os.path.join(DATA_PATH, 'y_test.pkl'), 'rb') as f:
+    with open(y_test_path, 'rb') as f:
         y_test = pickle.load(f)
     return X_test, y_test
 
 # 모델 로드 함수
 @st.cache_resource
 def load_models():
-    with open(os.path.join(MODEL_PATH, 'ensemble_model.pkl'), 'rb') as f:
+    ensemble_model_path = os.path.join(MODEL_PATH, 'ensemble_model.pkl')
+    mlp_model_path = os.path.join(MODEL_PATH, 'mlp_model.h5')
+    cnn_model_path = os.path.join(MODEL_PATH, 'cnn_model.h5')
+    dl_model_emb_path = os.path.join(MODEL_PATH, 'dl_model_emb.h5')
+
+    if not os.path.exists(ensemble_model_path) or not os.path.exists(mlp_model_path) or not os.path.exists(cnn_model_path) or not os.path.exists(dl_model_emb_path):
+        st.error(f"Model file not found in path: {MODEL_PATH}")
+        st.stop()
+
+    with open(ensemble_model_path, 'rb') as f:
         ml_model = pickle.load(f)
-    mlp_model = tf.keras.models.load_model(os.path.join(MODEL_PATH, 'mlp_model.h5'))
-    cnn_model = tf.keras.models.load_model(os.path.join(MODEL_PATH, 'cnn_model.h5'))
-    dl_model_emb = tf.keras.models.load_model(os.path.join(MODEL_PATH, 'dl_model_emb.h5'))
+    mlp_model = tf.keras.models.load_model(mlp_model_path)
+    cnn_model = tf.keras.models.load_model(cnn_model_path)
+    dl_model_emb = tf.keras.models.load_model(dl_model_emb_path)
     return ml_model, mlp_model, cnn_model, dl_model_emb
 
 # 모델 평가 함수
@@ -81,7 +97,7 @@ if st.button('Classify'):
         cnn_accuracy = evaluate_model(cnn_model, cnn_X_test, model_type='dl')
 
         # 임베딩 모델 평가
-        dl_input_data = X_test.reshape(X_test.shape[0], 100, 3)
+        dl_input_data = X_test.reshape(X_test.shape[0], 100, 3)  # Adjust the shape according to your model's input shape
         dl_accuracy = evaluate_model(dl_model_emb, dl_input_data, model_type='dl')
 
         # 모델 로드 및 평가 (집계)
