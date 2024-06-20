@@ -43,9 +43,20 @@ def evaluate_model(model, input_data, model_type='ml'):
         st.error(f"Error evaluating {model_type} model: {e}")
         return np.array([])
 
-# 앙상블 평가 함수
-def evaluate_ensemble(models, input_data):
+# 모델의 정확도 로드
+def load_model_accuracies():
+    accuracies = {
+        'ml': 0.981,   # XGBoost 정확도
+        'mlp': 0.986,  # MLP 정확도
+        'cnn': 0.985,  # CNN 정확도
+        'dl': 0.984    # 임베딩 모델 정확도
+    }
+    return accuracies
+
+# 가중치를 적용한 앙상블 평가 함수
+def evaluate_ensemble(models, input_data, model_accuracies):
     preds = []
+    weights = []
     for model, model_type, _ in models:
         try:
             if model_type == 'cnn':
@@ -60,7 +71,8 @@ def evaluate_ensemble(models, input_data):
             else:
                 y_pred_prob = evaluate_model(model, input_data, model_type)
             if y_pred_prob.size > 0:
-                preds.append(y_pred_prob)
+                preds.append(y_pred_prob * model_accuracies[model_type])
+                weights.append(model_accuracies[model_type])
         except Exception as e:
             st.error(f"Error evaluating {model_type} model: {e}")
 
@@ -69,7 +81,8 @@ def evaluate_ensemble(models, input_data):
         return None
 
     preds = np.array(preds)
-    y_pred_prob_final = np.mean(preds, axis=0)
+    weights = np.array(weights)
+    y_pred_prob_final = np.average(preds, axis=0, weights=weights)
 
     return y_pred_prob_final
 
@@ -86,15 +99,16 @@ if st.button('Classify'):
         input_data = np.array([one_hot_encode_sequence(sequence)])
 
         ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
+        model_accuracies = load_model_accuracies()
 
         models = [
             (ml_model, 'ml', None),
-            (mlp_model, 'dl', None),
+            (mlp_model, 'mlp', None),
             (cnn_model, 'cnn', None),
             (dl_model_emb, 'dl', None)
         ]
 
-        ensemble_prob = evaluate_ensemble(models, input_data)
+        ensemble_prob = evaluate_ensemble(models, input_data, model_accuracies)
 
         if ensemble_prob is not None:
             st.write(f"Probability of being bacteriocin: {ensemble_prob[0] * 100:.2f}%")
