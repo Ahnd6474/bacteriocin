@@ -35,7 +35,7 @@ def one_hot_encode_sequence(sequence, max_length=300):
 def evaluate_model(model, input_data, model_type='ml'):
     try:
         if model_type == 'ml':
-            y_pred_prob = model.predict_proba(input_data)[:, 1]
+            y_pred_prob = model.predict_proba(input_data.reshape(input_data.shape[0], -1))[:, 1]
         else:
             y_pred_prob = model.predict(input_data).flatten()
         return y_pred_prob
