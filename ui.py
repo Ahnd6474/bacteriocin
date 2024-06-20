@@ -1,18 +1,16 @@
-# ui.py
 import streamlit as st
 import pickle
 import numpy as np
-import pandas as pd
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import tensorflow as tf
 import os
+from sklearn.metrics import accuracy_score
 
 # 경로 설정
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(PROJECT_ROOT, 'Data', 'processed')
 MODEL_PATH = os.path.join(PROJECT_ROOT, 'model')
 
-# 데이터 로드
+# 데이터 로드 함수
 @st.cache_data
 def load_data():
     with open(os.path.join(DATA_PATH, 'X_test.pkl'), 'rb') as f:
@@ -21,7 +19,7 @@ def load_data():
         y_test = pickle.load(f)
     return X_test, y_test
 
-# 모델 로드
+# 모델 로드 함수
 @st.cache_resource
 def load_models():
     with open(os.path.join(MODEL_PATH, 'ensemble_model.pkl'), 'rb') as f:
@@ -31,83 +29,72 @@ def load_models():
     dl_model_emb = tf.keras.models.load_model(os.path.join(MODEL_PATH, 'dl_model_emb.h5'))
     return ml_model, mlp_model, cnn_model, dl_model_emb
 
-X_test, y_test = load_data()
-ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
-
-# y_test의 형식 변환 (필요할 경우)
-if isinstance(y_test, pd.Series):
-    y_test = y_test.to_numpy().astype(int)
-
 # 모델 평가 함수
-def evaluate_model(model, X_test, y_test, model_type='ml'):
+def evaluate_model(model, input_data, model_type='ml'):
     if model_type == 'ml':
-        y_pred = model.predict(X_test)
-        if y_pred.ndim > 1 and y_pred.shape[1] > 1:
-            y_pred = np.argmax(y_pred, axis=1)
-        else:
-            y_pred = (y_pred > 0.5).astype("int32")
+        y_pred = model.predict(input_data)
+        y_pred = np.argmax(y_pred, axis=1) if y_pred.ndim > 1 else y_pred
     else:
-        y_pred = (model.predict(X_test) > 0.5).astype("int32")
+        y_pred = (model.predict(input_data) > 0.5).astype("int32")
         y_pred = y_pred.flatten()
+    return y_pred
 
-    y_test = y_test.flatten() if hasattr(y_test, 'flatten') else y_test
+# 모델 평가 함수 (집계 결과 포함)
+def evaluate_ensemble(models, input_data, y_test):
+    preds = []
+    for model, model_type in models:
+        y_pred = evaluate_model(model, input_data, model_type)
+        preds.append(y_pred)
+
+    # Majority voting
+    preds = np.array(preds)
+    y_pred = np.apply_along_axis(lambda x: np.bincount(x).argmax(), axis=0, arr=preds)
 
     accuracy = accuracy_score(y_test, y_pred)
-    cm = confusion_matrix(y_test, y_pred)
-    cr = classification_report(y_test, y_pred)
+    return accuracy
 
-    return accuracy, cm, cr
+# 스트림릿 UI 설정
+st.title('Bacteriocin Amino Acid Sequence Classifier')
+st.write('Enter amino acid sequences to predict whether they are bacteriocins.')
 
-st.title("Model Evaluation Dashboard")
+# 아미노산 서열 입력
+sequences = st.text_area('Enter amino acid sequences (one per line):')
 
-# 머신러닝 모델 평가
-st.subheader("Machine Learning Model Evaluation")
-ml_accuracy, ml_cm, ml_cr = evaluate_model(ml_model, X_test, y_test, model_type='ml')
-st.write(f"Accuracy: {ml_accuracy}")
-st.write("Confusion Matrix:")
-st.write(ml_cm)
-st.write("Classification Report:")
-st.write(ml_cr)
+if st.button('Classify'):
+    if sequences:
+        sequences = sequences.strip().split('\n')
 
-# MLP 모델 평가
-st.subheader("MLP Model Evaluation")
-mlp_accuracy, mlp_cm, mlp_cr = evaluate_model(mlp_model, X_test, y_test, model_type='dl')
-st.write(f"Accuracy: {mlp_accuracy}")
-st.write("Confusion Matrix:")
-st.write(mlp_cm)
-st.write("Classification Report:")
-st.write(mlp_cr)
+        # 입력 서열을 모델 입력 형식으로 변환하는 작업 필요
+        # 여기서는 단순히 길이 300의 랜덤 벡터로 변환하는 예시를 들었습니다.
+        # 실제로는 아미노산 서열을 벡터화하는 전처리 작업이 필요합니다.
+        input_data = np.random.rand(len(sequences), 300)
 
-# CNN 모델 평가
-st.subheader("CNN Model Evaluation")
-cnn_X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)  # CNN input shape 맞추기
-cnn_accuracy, cnn_cm, cnn_cr = evaluate_model(cnn_model, cnn_X_test, y_test, model_type='dl')
-st.write(f"Accuracy: {cnn_accuracy}")
-st.write("Confusion Matrix:")
-st.write(cnn_cm)
-st.write("Classification Report:")
-st.write(cnn_cr)
+        # 데이터 로드
+        X_test, y_test = load_data()
 
-# 임베딩 모델 평가
-st.subheader("Deep Learning Model with Embeddings Evaluation")
-# 입력 크기 맞추기
-dl_input_shape = dl_model_emb.input_shape[1]
-if X_test.shape[1] != dl_input_shape:
-    X_test_emb = np.zeros((X_test.shape[0], dl_input_shape))
-    X_test_emb[:, :min(dl_input_shape, X_test.shape[1])] = X_test[:, :min(dl_input_shape, X_test.shape[1])]
-else:
-    X_test_emb = X_test
+        # 모델 로드
+        ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
 
-dl_model_emb_accuracy, dl_model_emb_cm, dl_model_emb_cr = evaluate_model(dl_model_emb, X_test_emb, y_test, model_type='dl')
-st.write(f"Accuracy: {dl_model_emb_accuracy}")
-st.write("Confusion Matrix:")
-st.write(dl_model_emb_cm)
-st.write("Classification Report:")
-st.write(dl_model_emb_cr)
+        # 머신러닝 모델 평가
+        ml_accuracy = evaluate_model(ml_model, input_data, model_type='ml')
 
-# 실행 방법 안내
-st.sidebar.title("Instructions")
-st.sidebar.write("1. Ensure all required files are in the appropriate directories.")
-st.sidebar.write("2. Run this script with the command: `streamlit run ui.py`")
-st.sidebar.write("3. View the results on the Streamlit web interface.")
+        # MLP 모델 평가
+        mlp_accuracy = evaluate_model(mlp_model, input_data, model_type='dl')
 
+        # CNN 모델 평가
+        cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
+        cnn_accuracy = evaluate_model(cnn_model, cnn_input_data, model_type='dl')
+
+        # 임베딩 모델 평가
+        dl_input_data = input_data.reshape(input_data.shape[0], 100, 3)  # 입력 크기 맞추기
+        dl_accuracy = evaluate_model(dl_model_emb, dl_input_data, model_type='dl')
+
+        # 모델 로드 및 평가 (집계)
+        models = [(ml_model, 'ml'), (mlp_model, 'dl'), (cnn_model, 'dl'), (dl_model_emb, 'dl')]
+        ensemble_accuracy = evaluate_ensemble(models, X_test, y_test)
+
+        # 결과 출력
+        st.write('Ensemble Model Accuracy:')
+        st.write(f'{ensemble_accuracy}')
+    else:
+        st.write('Please enter at least one amino acid sequence.')
