@@ -11,6 +11,7 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(PROJECT_ROOT, 'Data', 'processed')
 MODEL_PATH = os.path.join(PROJECT_ROOT, 'model')
 
+
 # 데이터 로드 함수
 @st.cache_data
 def load_data():
@@ -32,6 +33,7 @@ def load_data():
 
     return X_test, y_test
 
+
 # 모델 로드 함수
 @st.cache_resource
 def load_models():
@@ -40,7 +42,8 @@ def load_models():
     cnn_model_path = os.path.join(MODEL_PATH, 'cnn_model.h5')
     dl_model_emb_path = os.path.join(MODEL_PATH, 'dl_model_emb.h5')
 
-    if not os.path.exists(ensemble_model_path) or not os.path.exists(mlp_model_path) or not os.path.exists(cnn_model_path) or not os.path.exists(dl_model_emb_path):
+    if not os.path.exists(ensemble_model_path) or not os.path.exists(mlp_model_path) or not os.path.exists(
+            cnn_model_path) or not os.path.exists(dl_model_emb_path):
         st.error(f"Model file not found in path: {MODEL_PATH}")
         st.stop()
 
@@ -50,6 +53,7 @@ def load_models():
     cnn_model = tf.keras.models.load_model(cnn_model_path)
     dl_model_emb = tf.keras.models.load_model(dl_model_emb_path)
     return ml_model, mlp_model, cnn_model, dl_model_emb
+
 
 # 모델 평가 함수
 def evaluate_model(model, input_data, model_type='ml'):
@@ -64,6 +68,7 @@ def evaluate_model(model, input_data, model_type='ml'):
     except Exception as e:
         st.error(f"Error evaluating {model_type} model: {e}")
         return np.array([])
+
 
 # 가중치 투표 방식 평가 함수
 def evaluate_ensemble(models, input_data, y_test):
@@ -81,7 +86,8 @@ def evaluate_ensemble(models, input_data, y_test):
                 y_pred = evaluate_model(model, dl_input_data, model_type)
             else:
                 y_pred = evaluate_model(model, input_data, model_type)
-            preds.append(y_pred)
+            if y_pred.size > 0:
+                preds.append(y_pred)
         except Exception as e:
             st.error(f"Error evaluating {model_type} model: {e}")
 
@@ -114,6 +120,7 @@ def evaluate_ensemble(models, input_data, y_test):
 
     return accuracy
 
+
 # 스트림릿 UI 설정
 st.title('Bacteriocin Amino Acid Sequence Classifier')
 st.write('Enter amino acid sequences to predict whether they are bacteriocins.')
@@ -132,10 +139,17 @@ if st.button('Classify'):
         ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
 
         # 모델 정확도 계산
-        ml_accuracy = accuracy_score(y_test, evaluate_model(ml_model, X_test, 'ml'))
-        mlp_accuracy = accuracy_score(y_test, evaluate_model(mlp_model, X_test, 'dl'))
-        cnn_accuracy = accuracy_score(y_test, evaluate_model(cnn_model, X_test.reshape(X_test.shape[0], X_test.shape[1], 1), 'cnn'))
-        dl_accuracy = accuracy_score(y_test, evaluate_model(dl_model_emb, X_test, 'dl'))
+        ml_predictions = evaluate_model(ml_model, X_test, 'ml')
+        ml_accuracy = accuracy_score(y_test, ml_predictions) if ml_predictions.size > 0 else None
+
+        mlp_predictions = evaluate_model(mlp_model, X_test, 'dl')
+        mlp_accuracy = accuracy_score(y_test, mlp_predictions) if mlp_predictions.size > 0 else None
+
+        cnn_predictions = evaluate_model(cnn_model, X_test.reshape(X_test.shape[0], X_test.shape[1], 1), 'cnn')
+        cnn_accuracy = accuracy_score(y_test, cnn_predictions) if cnn_predictions.size > 0 else None
+
+        dl_predictions = evaluate_model(dl_model_emb, X_test, 'dl')
+        dl_accuracy = accuracy_score(y_test, dl_predictions) if dl_predictions.size > 0 else None
 
         # 모델 및 가중치 설정
         models = [
@@ -144,6 +158,9 @@ if st.button('Classify'):
             (cnn_model, 'cnn', cnn_accuracy),
             (dl_model_emb, 'dl', dl_accuracy)
         ]
+
+        # 유효한 모델만 필터링
+        models = [model for model in models if model[2] is not None]
 
         # 모델 평가 및 집계
         ensemble_accuracy = evaluate_ensemble(models, X_test, y_test)
