@@ -148,7 +148,8 @@ if st.button('Classify'):
         cnn_predictions = evaluate_model(cnn_model, X_test.reshape(X_test.shape[0], X_test.shape[1], 1), 'cnn')
         cnn_accuracy = accuracy_score(y_test, cnn_predictions) if cnn_predictions.size > 0 else None
 
-        dl_predictions = evaluate_model(dl_model_emb, X_test, 'dl')
+        dl_predictions = evaluate_model(dl_model_emb,
+                                        X_test[:, :100] if dl_model_emb.input_shape[-1] == 100 else X_test, 'dl')
         dl_accuracy = accuracy_score(y_test, dl_predictions) if dl_predictions.size > 0 else None
 
         # 모델 및 가중치 설정
