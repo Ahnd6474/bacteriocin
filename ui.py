@@ -96,13 +96,13 @@ if st.button('Classify'):
             return input_data.flatten()[:300]
 
         def transform_mlp(input_data):
-            return input_data.flatten().reshape(1, 300)
+            return input_data.flatten()[:300].reshape(1, 300)
 
         def transform_cnn(input_data):
             return input_data.reshape(1, 300, 20, 1)
 
         def transform_dl(input_data):
-            return input_data.flatten()[:100].reshape(1, 100, 20)
+            return input_data.flatten()[:100].reshape(1, 100, 1)
 
         models = [
             (ml_model, 'ml', transform_ml),
