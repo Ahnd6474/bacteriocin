@@ -11,7 +11,6 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(PROJECT_ROOT, 'Data', 'processed')
 MODEL_PATH = os.path.join(PROJECT_ROOT, 'model')
 
-
 # 데이터 로드 함수
 @st.cache_data
 def load_data():
@@ -33,7 +32,6 @@ def load_data():
 
     return X_test, y_test
 
-
 # 모델 로드 함수
 @st.cache_resource
 def load_models():
@@ -42,8 +40,7 @@ def load_models():
     cnn_model_path = os.path.join(MODEL_PATH, 'cnn_model.h5')
     dl_model_emb_path = os.path.join(MODEL_PATH, 'dl_model_emb.h5')
 
-    if not os.path.exists(ensemble_model_path) or not os.path.exists(mlp_model_path) or not os.path.exists(
-            cnn_model_path) or not os.path.exists(dl_model_emb_path):
+    if not os.path.exists(ensemble_model_path) or not os.path.exists(mlp_model_path) or not os.path.exists(cnn_model_path) or not os.path.exists(dl_model_emb_path):
         st.error(f"Model file not found in path: {MODEL_PATH}")
         st.stop()
 
@@ -54,40 +51,36 @@ def load_models():
     dl_model_emb = tf.keras.models.load_model(dl_model_emb_path)
     return ml_model, mlp_model, cnn_model, dl_model_emb
 
-
 # 모델 평가 함수
 def evaluate_model(model, input_data, model_type='ml'):
     try:
         if model_type == 'ml':
-            y_pred = model.predict(input_data)
-            y_pred = np.argmax(y_pred, axis=1) if y_pred.ndim > 1 else y_pred
+            y_pred_prob = model.predict_proba(input_data)[:, 1]
         else:
-            y_pred = (model.predict(input_data) > 0.5).astype("int32")
-            y_pred = y_pred.flatten()
-        return np.array(y_pred)
+            y_pred_prob = model.predict(input_data).flatten()
+        return y_pred_prob
     except Exception as e:
         st.error(f"Error evaluating {model_type} model: {e}")
         return np.array([])
 
-
 # 가중치 투표 방식 평가 함수
-def evaluate_ensemble(models, input_data, y_test):
+def evaluate_ensemble(models, input_data):
     preds = []
     for model, model_type, _ in models:
         try:
             if model_type == 'cnn':
                 cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
-                y_pred = evaluate_model(model, cnn_input_data, model_type)
+                y_pred_prob = evaluate_model(model, cnn_input_data, model_type)
             elif model_type == 'dl' and model.input_shape[-1] == 100:
                 dl_input_data = input_data[:, :100]
-                y_pred = evaluate_model(model, dl_input_data, model_type)
+                y_pred_prob = evaluate_model(model, dl_input_data, model_type)
             elif model_type == 'dl' and model.input_shape[-1] == 300:
                 dl_input_data = input_data
-                y_pred = evaluate_model(model, dl_input_data, model_type)
+                y_pred_prob = evaluate_model(model, dl_input_data, model_type)
             else:
-                y_pred = evaluate_model(model, input_data, model_type)
-            if y_pred.size > 0:
-                preds.append(y_pred)
+                y_pred_prob = evaluate_model(model, input_data, model_type)
+            if y_pred_prob.size > 0:
+                preds.append(y_pred_prob)
         except Exception as e:
             st.error(f"Error evaluating {model_type} model: {e}")
 
@@ -96,34 +89,13 @@ def evaluate_ensemble(models, input_data, y_test):
         return None
 
     preds = np.array(preds)
-    y_pred_final = np.zeros(preds.shape[1])
-    for i in range(len(models)):
-        y_pred_final += preds[i]
+    y_pred_prob_final = np.mean(preds, axis=0)
 
-    y_pred_final = (y_pred_final / len(models)).round().astype(int)
-
-    y_test = y_test.astype(int)
-
-    try:
-        accuracy = accuracy_score(y_test, y_pred_final)
-        cm = confusion_matrix(y_test, y_pred_final)
-        cr = classification_report(y_test, y_pred_final)
-
-        st.write(f"Accuracy: {accuracy}")
-        st.write("Confusion Matrix:")
-        st.write(cm)
-        st.write("Classification Report:")
-        st.write(cr)
-    except ValueError as e:
-        st.error(f"Error calculating accuracy: {e}")
-        return None
-
-    return accuracy
-
+    return y_pred_prob_final
 
 # 스트림릿 UI 설정
 st.title('Bacteriocin Amino Acid Sequence Classifier')
-st.write('Enter amino acid sequences to predict whether they are bacteriocins.')
+st.write('Enter amino acid sequences to predict the probability they are bacteriocins.')
 
 # 아미노산 서열 입력
 sequences = st.text_area('Enter amino acid sequences (one per line):')
@@ -138,37 +110,20 @@ if st.button('Classify'):
         # 모델 로드
         ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
 
-        # 모델 정확도 계산
-        ml_predictions = evaluate_model(ml_model, X_test, 'ml')
-        ml_accuracy = accuracy_score(y_test, ml_predictions) if ml_predictions.size > 0 else None
-
-        mlp_predictions = evaluate_model(mlp_model, X_test, 'dl')
-        mlp_accuracy = accuracy_score(y_test, mlp_predictions) if mlp_predictions.size > 0 else None
-
-        cnn_predictions = evaluate_model(cnn_model, X_test.reshape(X_test.shape[0], X_test.shape[1], 1), 'cnn')
-        cnn_accuracy = accuracy_score(y_test, cnn_predictions) if cnn_predictions.size > 0 else None
-
-        dl_predictions = evaluate_model(dl_model_emb,
-                                        X_test[:, :100] if dl_model_emb.input_shape[-1] == 100 else X_test, 'dl')
-        dl_accuracy = accuracy_score(y_test, dl_predictions) if dl_predictions.size > 0 else None
-
         # 모델 및 가중치 설정
         models = [
-            (ml_model, 'ml', ml_accuracy),
-            (mlp_model, 'dl', mlp_accuracy),
-            (cnn_model, 'cnn', cnn_accuracy),
-            (dl_model_emb, 'dl', dl_accuracy)
+            (ml_model, 'ml', None),
+            (mlp_model, 'dl', None),
+            (cnn_model, 'cnn', None),
+            (dl_model_emb, 'dl', None)
         ]
 
-        # 유효한 모델만 필터링
-        models = [model for model in models if model[2] is not None]
-
         # 모델 평가 및 집계
-        ensemble_accuracy = evaluate_ensemble(models, X_test, y_test)
+        ensemble_probs = evaluate_ensemble(models, X_test)
 
         # 결과 출력
-        if ensemble_accuracy:
-            st.write('Ensemble Model Accuracy:')
-            st.write(f'{ensemble_accuracy}')
+        if ensemble_probs is not None:
+            for i, prob in enumerate(ensemble_probs):
+                st.write(f"Sequence {i+1}: Probability of being bacteriocin: {prob:.4f}")
     else:
         st.write('Please enter at least one amino acid sequence.')
