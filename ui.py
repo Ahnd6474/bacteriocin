@@ -126,6 +126,6 @@ if st.button('Classify'):
 
         # 결과 출력
         if ensemble_prob is not None:
-            st.write(f"Probability of being bacteriocin: {ensemble_prob[0]:.4f}")
+            st.write(f"Probability of being bacteriocin: {ensemble_prob[0] * 100:.2f}%")
     else:
         st.write('Please enter an amino acid sequence.')
