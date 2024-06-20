@@ -64,11 +64,6 @@ if st.button('Classify'):
     if sequences:
         sequences = sequences.strip().split('\n')
 
-        # 입력 서열을 모델 입력 형식으로 변환하는 작업 필요
-        # 여기서는 단순히 길이 300의 랜덤 벡터로 변환하는 예시를 들었습니다.
-        # 실제로는 아미노산 서열을 벡터화하는 전처리 작업이 필요합니다.
-        input_data = np.random.rand(len(sequences), 300)
-
         # 데이터 로드
         X_test, y_test = load_data()
 
@@ -76,17 +71,17 @@ if st.button('Classify'):
         ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
 
         # 머신러닝 모델 평가
-        ml_accuracy = evaluate_model(ml_model, input_data, model_type='ml')
+        ml_accuracy = evaluate_model(ml_model, X_test, model_type='ml')
 
         # MLP 모델 평가
-        mlp_accuracy = evaluate_model(mlp_model, input_data, model_type='dl')
+        mlp_accuracy = evaluate_model(mlp_model, X_test, model_type='dl')
 
         # CNN 모델 평가
-        cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
-        cnn_accuracy = evaluate_model(cnn_model, cnn_input_data, model_type='dl')
+        cnn_X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
+        cnn_accuracy = evaluate_model(cnn_model, cnn_X_test, model_type='dl')
 
         # 임베딩 모델 평가
-        dl_input_data = input_data.reshape(input_data.shape[0], 100, 3)  # 입력 크기 맞추기
+        dl_input_data = X_test.reshape(X_test.shape[0], 100, 3)
         dl_accuracy = evaluate_model(dl_model_emb, dl_input_data, model_type='dl')
 
         # 모델 로드 및 평가 (집계)
