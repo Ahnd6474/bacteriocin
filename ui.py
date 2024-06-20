@@ -3,13 +3,12 @@ import pickle
 import numpy as np
 import tensorflow as tf
 import os
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
 # 경로 설정
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_PATH = os.path.join(PROJECT_ROOT, 'Data', 'processed')
 MODEL_PATH = os.path.join(PROJECT_ROOT, 'model')
-
 
 # 데이터 로드 함수
 @st.cache_data
@@ -27,7 +26,6 @@ def load_data():
         y_test = pickle.load(f)
     return X_test, y_test
 
-
 # 모델 로드 함수
 @st.cache_resource
 def load_models():
@@ -36,8 +34,7 @@ def load_models():
     cnn_model_path = os.path.join(MODEL_PATH, 'cnn_model.h5')
     dl_model_emb_path = os.path.join(MODEL_PATH, 'dl_model_emb.h5')
 
-    if not os.path.exists(ensemble_model_path) or not os.path.exists(mlp_model_path) or not os.path.exists(
-            cnn_model_path) or not os.path.exists(dl_model_emb_path):
+    if not os.path.exists(ensemble_model_path) or not os.path.exists(mlp_model_path) or not os.path.exists(cnn_model_path) or not os.path.exists(dl_model_emb_path):
         st.error(f"Model file not found in path: {MODEL_PATH}")
         st.stop()
 
@@ -47,7 +44,6 @@ def load_models():
     cnn_model = tf.keras.models.load_model(cnn_model_path)
     dl_model_emb = tf.keras.models.load_model(dl_model_emb_path)
     return ml_model, mlp_model, cnn_model, dl_model_emb
-
 
 # 모델 평가 함수
 def evaluate_model(model, input_data, model_type='ml'):
@@ -59,12 +55,11 @@ def evaluate_model(model, input_data, model_type='ml'):
         y_pred = y_pred.flatten()
     return y_pred
 
-
 # 가중치 투표 방식 평가 함수
 def evaluate_ensemble(models, input_data, y_test):
     preds = []
     weights = []
-    for model, model_type, weight in models:
+    for model, model_type in models:
         if model_type == 'cnn':
             cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
             y_pred = evaluate_model(model, cnn_input_data, model_type)
@@ -77,18 +72,28 @@ def evaluate_ensemble(models, input_data, y_test):
         else:
             y_pred = evaluate_model(model, input_data, model_type)
         preds.append(y_pred)
-        weights.append(weight)
 
     preds = np.array(preds)
-    weighted_preds = np.zeros(preds.shape[1])
+    y_pred_final = np.zeros(preds.shape[1])
     for i in range(len(models)):
-        weighted_preds += preds[i] * weights[i]
+        y_pred_final += preds[i]
 
-    y_pred = (weighted_preds >= (sum(weights) / 2)).astype(int)
+    y_pred_final = (y_pred_final / len(models)).round().astype(int)
 
-    accuracy = accuracy_score(y_test, y_pred)
+    # y_test의 형식을 일관되게 맞춤
+    y_test = y_test.astype(int)
+
+    accuracy = accuracy_score(y_test, y_pred_final)
+    cm = confusion_matrix(y_test, y_pred_final)
+    cr = classification_report(y_test, y_pred_final)
+
+    print(f"Accuracy: {accuracy}")
+    print("Confusion Matrix:")
+    print(cm)
+    print("Classification Report:")
+    print(cr)
+
     return accuracy
-
 
 # 스트림릿 UI 설정
 st.title('Bacteriocin Amino Acid Sequence Classifier')
@@ -107,11 +112,11 @@ if st.button('Classify'):
         # 모델 로드
         ml_model, mlp_model, cnn_model, dl_model_emb = load_models()
 
-        # 모델 정확도 가정된 값
-        ml_accuracy = 0.98  # 예시 값
-        mlp_accuracy = 0.99  # 예시 값
-        cnn_accuracy = 0.985  # 예시 값
-        dl_accuracy = 0.95  # 예시 값
+        # 모델 정확도 계산
+        ml_accuracy = accuracy_score(y_test, evaluate_model(ml_model, X_test, 'ml'))
+        mlp_accuracy = accuracy_score(y_test, evaluate_model(mlp_model, X_test, 'dl'))
+        cnn_accuracy = accuracy_score(y_test, evaluate_model(cnn_model, X_test.reshape(X_test.shape[0], X_test.shape[1], 1), 'cnn'))
+        dl_accuracy = accuracy_score(y_test, evaluate_model(dl_model_emb, X_test, 'dl'))
 
         # 모델 및 가중치 설정
         models = [
