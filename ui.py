@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 import os
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+import pandas as pd
 
 # 경로 설정
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -24,6 +25,11 @@ def load_data():
         X_test = pickle.load(f)
     with open(y_test_path, 'rb') as f:
         y_test = pickle.load(f)
+
+    # y_test를 numpy 배열로 변환
+    if isinstance(y_test, pd.Series):
+        y_test = y_test.to_numpy()
+
     return X_test, y_test
 
 # 모델 로드 함수
@@ -58,7 +64,7 @@ def evaluate_model(model, input_data, model_type='ml'):
 # 가중치 투표 방식 평가 함수
 def evaluate_ensemble(models, input_data, y_test):
     preds = []
-    for model, model_type in models:
+    for model, model_type, _ in models:
         if model_type == 'cnn':
             cnn_input_data = input_data.reshape(input_data.shape[0], input_data.shape[1], 1)
             y_pred = evaluate_model(model, cnn_input_data, model_type)
@@ -78,10 +84,6 @@ def evaluate_ensemble(models, input_data, y_test):
         y_pred_final += preds[i]
 
     y_pred_final = (y_pred_final / len(models)).round().astype(int)
-
-    # y_test의 형식을 일관되게 맞춤
-    if isinstance(y_test, pd.Series):
-        y_test = y_test.to_numpy()
 
     y_test = y_test.astype(int)
 
